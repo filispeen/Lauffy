@@ -7,12 +7,13 @@
     author = { name = "filispeen", email = "illayfilisp@gmail.com" },
     homepage = "https://github.com/filispeen/Lauffy",
     dependencies = {
-      "filispeen/discord.lua@0.9.1",
-      "filispeen/lavalink.lua@0.2.6"
+      "filispeen/discord.lua@v1.0.1",
+      "filispeen/lavalink.lua@v0.3.5"
     },
     files = {
       "main.lua",
-      "!test*"
+      "!test*",
+      "utils/**.lua",
+      "commands/**.lua",
     }
   }
-  

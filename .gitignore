@@ -2,4 +2,7 @@
 !LICENSE
 deps/
 .*/
+.*
 *.md
+
+!.env.example

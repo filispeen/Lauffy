@@ -1,17 +1,18 @@
 local discord = require("discord.lua")
+local music = require("../services/music")
 
 return {
-  name = "echo",
-  description = "Echoes back the input text.",
+  name = "play",
+  description = "Play a Lavalink search query or URL",
   options = {
     {
-      name = "text",
-      description = "The text to echo back.",
+      name = "query",
+      description = "Search text or a provider URL",
       type = discord.enums.OPTION_TYPE.STRING,
       required = true,
-    }
+    },
   },
   callback = function(ctx)
-    ctx:respond(ctx.args.text, { ephemeral = false })
+    music.play(ctx, ctx:require_arg("query"))
   end,
 }

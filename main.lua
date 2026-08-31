@@ -3,18 +3,15 @@ local lavalink = require("lavalink.lua")
 
 local env = require("./utils/env")
 local utils = require("./utils/general")
-env.load()
+local config = env.config()
 
-local token = process.env.TOKEN
-if type(token) ~= "string" or token:match("^%s*$") then
-  error("TOKEN is required. Set TOKEN in .env or provide it as an environment variable.")
-end
-
-local bot = discord(nil, discord.enums.combine_intents(
+local bot = discord.Bot(nil, discord.enums.combine_intents(
   discord.enums.INTENTS.GUILDS,
   discord.enums.INTENTS.GUILD_VOICE_STATES
 ))
 
+-- Commands must be registered before bot:run() so discord.lua includes them
+-- in the first automatic command synchronization after READY.
 utils.load_commands(bot)
 
 local function log_track(level, player, track)
@@ -22,51 +19,66 @@ local function log_track(level, player, track)
   utils.log(level, "Guild %s: %s", tostring(player.guildId), tostring(title))
 end
 
-local function create_lavalink_manager()
+local function create_lavalink_client()
   if bot.lavalink then return bot.lavalink end
 
   local manager = lavalink.discord(bot, {
-    clientName = "lavalink-lua_" .. bot.user.id,
+    clientName = "lauffy/" .. bot.user.id,
     nodes = {
       {
         id = "main",
-        host = env.string(process.env.LAVALINK_HOST, "localhost"),
-        port = env.number(process.env.LAVALINK_PORT, 2333, "LAVALINK_PORT"),
-        authorization = env.string(process.env.LAVALINK_PASS, "youshallnotpass"),
-        secure = env.boolean(process.env.LAVALINK_SECURE, false, "LAVALINK_SECURE"),
-        resuming = env.boolean(process.env.LAVALINK_RESUME, true, "LAVALINK_RESUME"),
-        resumeTimeout = env.number(process.env.LAVALINK_RESUME_TIMEOUT, 60, "LAVALINK_RESUME_TIMEOUT"),
-        reconnectTries = env.number(process.env.LAVALINK_RECONNECT_TRIES, 5, "LAVALINK_RECONNECT_TRIES"),
-        reconnectDelay = env.number(process.env.LAVALINK_RECONNECT_DELAY, 5000, "LAVALINK_RECONNECT_DELAY"),
+        host = config.lavalink.host,
+        port = config.lavalink.port,
+        authorization = config.lavalink.authorization,
+        secure = config.lavalink.secure,
+        resuming = config.lavalink.resuming,
+        resumeTimeout = config.lavalink.resumeTimeout,
+        reconnectTries = config.lavalink.reconnectTries,
+        reconnectDelay = config.lavalink.reconnectDelay,
       },
     },
     playerOptions = { defaultVolume = 100 },
   })
 
   manager:on("nodeReady", function(node, resumed, session_id)
-    utils.log("NODE", "Node %s ready (resumed: %s, session: %s)", node.options.id, tostring(resumed), tostring(session_id))
+    utils.log("NODE", "Node %s ready (resumed: %s, session: %s)",
+      node.options.id, tostring(resumed), tostring(session_id))
   end)
   manager:on("nodeError", function(node, err)
     utils.log("ERROR", "Node %s error: %s", node.options.id, tostring(err))
   end)
   manager:on("error", function(player, err)
-    utils.log("ERROR", "Guild %s player error: %s", tostring(player.guildId), tostring(err))
+    utils.log("ERROR", "Guild %s player error: %s",
+      tostring(player and player.guildId or "?"), tostring(err))
   end)
   manager:on("trackStart", function(player, track)
     log_track("TRACK", player, track)
   end)
+  manager:on("trackError", function(player, track, err)
+    log_track("ERROR", player, track)
+    utils.log("ERROR", "Guild %s: Lavalink track error: %s", tostring(player.guildId), tostring(err))
+    player:skip(nil, false)
+  end)
   manager:on("queueEnd", function(player)
-    utils.log("TRACK", "Guild %s: queue ended", tostring(player.guildId))
+    utils.log("TRACK", "Guild %s: queue ended; disconnecting", tostring(player.guildId))
+    player:disconnect(true)
   end)
 
   bot.lavalink = manager
+  -- Slash command contexts expose discord.lua's underlying Client.
+  bot.client.lavalink = manager
   manager:init()
   return manager
 end
 
-bot:on("ready", function()
-  utils.log("BOT", "Logged in as %s (id: %s)", bot.user.username, "<@" .. bot.user.id .. ">")
-  create_lavalink_manager()
+bot:on("application_command_error", function(ctx, err)
+  utils.log("ERROR", "Slash command failed: %s", tostring(err))
+  pcall(ctx.respond, ctx, "An internal error occurred while running this command.", { ephemeral = true })
 end)
 
-bot:run(token)
+bot:on("ready", function()
+  utils.log("BOT", "Logged in as %s (id: %s)", bot.user.username, bot.user.id)
+  create_lavalink_client()
+end)
+
+bot:run(config.token)

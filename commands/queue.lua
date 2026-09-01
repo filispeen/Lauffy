@@ -11,8 +11,14 @@ return {
       type = discord.enums.OPTION_TYPE.INTEGER,
       required = false,
     },
+    {
+      name = "page_size",
+      description = "Tracks per page, default: guild setting",
+      type = discord.enums.OPTION_TYPE.INTEGER,
+      required = false,
+    },
   },
   callback = function(ctx)
-    music.queue(ctx, ctx:get_arg("page", 1))
+    music.queue(ctx, ctx:get_arg("page", 1), ctx:get_arg("page_size"))
   end,
 }

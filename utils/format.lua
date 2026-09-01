@@ -37,11 +37,18 @@ function M.now_playing_embed(player)
   local position = player:getPosition()
   local length = info.isStream and "LIVE" or (M.duration(position) .. " / " .. M.duration(info.length))
   local state = player.paused and "Paused" or "Now playing"
+  local requested_by = track and track.requestedBy and ("<@" .. tostring(track.requestedBy) .. ">") or "Unknown"
+  local progress = ""
+  if not info.isStream and type(info.length) == "number" and info.length > 0 then
+    local ratio = math.max(0, math.min(1, position / info.length))
+    local filled = math.floor(ratio * 10)
+    progress = "\n" .. string.rep("▬", filled) .. "🔘" .. string.rep("▬", 10 - filled)
+  end
 
   local embed = {
     title = state,
     color = player.paused and 0xE67E22 or 0x2ECC71,
-    description = M.track_line(track),
+    description = M.track_line(track) .. "\nRequested by: " .. requested_by .. progress,
     fields = {
       { name = "Position", value = length, inline = true },
       { name = "Volume", value = tostring(player.volume) .. "%", inline = true },
@@ -89,12 +96,21 @@ function M.queue_embed(player, page, per_page)
     description = description .. "\n\nThe queue is empty."
   end
 
+  local total_length = 0
+  for _, track in ipairs(tracks) do
+    local info = track.info or {}
+    if not info.isStream and type(info.length) == "number" then
+      total_length = total_length + info.length
+    end
+  end
+
   return {
     title = "Playback queue",
     color = 0x5865F2,
     description = description,
     fields = {
       { name = "Queued", value = tostring(#tracks), inline = true },
+      { name = "Upcoming time", value = M.duration(total_length), inline = true },
       { name = "Page", value = string.format("%d / %d", page, total_pages), inline = true },
     },
   }, total_pages

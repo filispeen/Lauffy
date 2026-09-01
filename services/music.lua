@@ -1,9 +1,12 @@
 local lavalink = require("lavalink.lua")
 local format = require("../utils/format")
 local general = require("../utils/general")
+local settings = require("./settings")
+local bit = require("bit")
 
 local M = {}
 local QUEUE_PAGE_SIZE = 10
+local AUTOCOMPLETE_LIMIT = 10
 
 local function is_url(value)
   return value:match("^https?://") ~= nil
@@ -121,10 +124,33 @@ local function controlled_player(ctx)
   return player
 end
 
-function M.play(ctx, query)
+local function shuffle_tracks(tracks)
+  for index = #tracks, 2, -1 do
+    local swap = math.random(1, index)
+    tracks[index], tracks[swap] = tracks[swap], tracks[index]
+  end
+end
+
+local function limit_tracks(tracks, limit)
+  if #tracks <= limit then return tracks end
+  local limited = {}
+  for index = 1, limit do limited[index] = tracks[index] end
+  return limited
+end
+
+local function queue_tracks(player, tracks, options)
+  if options.immediate then
+    for index = #tracks, 1, -1 do player.queue:addAt(1, tracks[index]) end
+  else
+    player.queue:add(tracks)
+  end
+end
+
+function M.play(ctx, query, options)
   run(ctx, function()
     local current_guild_id = guild_id(ctx)
     if not current_guild_id then return end
+    options = options or {}
 
     if type(query) ~= "string" or not query:match("%S") then
       fail(ctx, "Provide a search query or URL.")
@@ -159,7 +185,14 @@ function M.play(ctx, query)
       return
     end
 
+    local guild_settings = settings.get(current_guild_id)
     local tracks = result.loadType == "playlist" and found or { found[1] }
+    tracks = limit_tracks(tracks, guild_settings.playlistLimit)
+    if options.shuffle and #tracks > 1 then shuffle_tracks(tracks) end
+    for _, track in ipairs(tracks) do
+      track.requestedBy = ctx.author and ctx.author.id or nil
+    end
+
     local created
     if not player then
       player, created = current_manager:createPlayer({
@@ -167,6 +200,7 @@ function M.play(ctx, query)
         voiceChannelId = author_channel_id,
         textChannelId = ctx.channel and ctx.channel.id,
         selfDeaf = true,
+        volume = guild_settings.defaultVolume,
       })
     end
 
@@ -178,11 +212,18 @@ function M.play(ctx, query)
     end
 
     player.textChannelId = ctx.channel and ctx.channel.id or player.textChannelId
-    player.queue:add(tracks)
-    if not player.playing then player:play() end
+    queue_tracks(player, tracks, options)
+    if not player.playing then
+      player:play()
+    elseif options.skip and player.queue.current then
+      player:skip(1, false)
+    end
 
     local playlist_name = result.data and result.data.info and result.data.info.name
-    reply(ctx, "", { embeds = { format.play_embed(tracks, playlist_name) } })
+    reply(ctx, "", {
+      embeds = { format.play_embed(tracks, playlist_name) },
+      ephemeral = guild_settings.queueAddResponseHidden,
+    })
   end)
 end
 
@@ -405,7 +446,7 @@ function M.unskip(ctx)
   end)
 end
 
-function M.queue(ctx, page)
+function M.queue(ctx, page, page_size)
   run(ctx, function()
     local current_guild_id = guild_id(ctx)
     if not current_guild_id then return end
@@ -420,12 +461,17 @@ function M.queue(ctx, page)
     end
 
     page = tonumber(page) or 1
+    page_size = tonumber(page_size) or settings.get(current_guild_id).defaultQueuePageSize or QUEUE_PAGE_SIZE
     if page < 1 or page % 1 ~= 0 then
       fail(ctx, "Page must be an integer starting at 1.")
       return
     end
+    if page_size < 1 or page_size > 30 or page_size % 1 ~= 0 then
+      fail(ctx, "Page size must be an integer between 1 and 30.")
+      return
+    end
 
-    local embed, total_pages = format.queue_embed(player, page, QUEUE_PAGE_SIZE)
+    local embed, total_pages = format.queue_embed(player, page, page_size)
     if page > total_pages then
       fail(ctx, string.format("That page does not exist. Available pages: %d.", total_pages))
       return
@@ -492,6 +538,216 @@ function M.loop(ctx, mode)
     end
     player:setRepeatMode(mode)
     reply(ctx, "Loop mode set to " .. mode .. ".")
+  end)
+end
+
+local function autocomplete_response(ctx, choices)
+  local interaction = ctx and ctx.interaction
+  local client = ctx and ctx.bot
+  if not interaction or not client or not client.rest then return end
+  return client.rest:create_interaction_response(interaction.id, interaction.token, {
+    type = 8,
+    data = { choices = choices },
+  })
+end
+
+local function autocomplete_label(track)
+  local title = format.track_title(track)
+  local author = track and track.info and track.info.author
+  local label = author and (title .. " — " .. author) or title
+  if #label > 100 then label = label:sub(1, 97) .. "..." end
+  return label
+end
+
+function M.autocomplete(ctx)
+  local query = type(ctx and ctx.value) == "string" and ctx.value:match("^%s*(.-)%s*$") or ""
+  if query == "" or is_url(query) then return autocomplete_response(ctx, {}) end
+
+  local current_manager = ctx.bot and ctx.bot.lavalink
+  if not current_manager then return autocomplete_response(ctx, {}) end
+
+  local ok, result = pcall(function()
+    return current_manager:search(query, { source = "ytsearch" })
+  end)
+  if not ok then
+    general.log("WARN", "Lavalink autocomplete failed: %s", tostring(result))
+    return autocomplete_response(ctx, {})
+  end
+
+  local choices, values = {}, {}
+  for _, track in ipairs(lavalink.utils.splitSearchResult(result.loadType, result)) do
+    local value = track.info and track.info.uri
+    if value and not values[value] then
+      values[value] = true
+      table.insert(choices, { name = autocomplete_label(track), value = value })
+      if #choices >= AUTOCOMPLETE_LIMIT then break end
+    end
+  end
+  return autocomplete_response(ctx, choices)
+end
+
+function M.favorite_autocomplete(ctx)
+  local guild = ctx and ctx.interaction and ctx.interaction.guild_id
+  if not guild then return autocomplete_response(ctx, {}) end
+
+  local query = type(ctx.value) == "string" and ctx.value:lower() or ""
+  local action = ctx.options and ctx.options.action
+  local choices = {}
+  for _, favorite in ipairs(settings.get(guild).favorites) do
+    local allowed = action ~= "remove"
+      or (ctx.interaction.member and ctx.interaction.member.user
+        and tostring(favorite.authorId) == tostring(ctx.interaction.member.user.id))
+    if allowed and favorite.name:lower():find(query, 1, true) then
+      table.insert(choices, { name = favorite.name, value = favorite.name })
+      if #choices >= 25 then break end
+    end
+  end
+  return autocomplete_response(ctx, choices)
+end
+
+local function favorite_embed(favorites)
+  local lines = {}
+  for _, favorite in ipairs(favorites) do
+    table.insert(lines, string.format("**%s** — <@%s>", favorite.name, favorite.authorId))
+  end
+  return {
+    title = "Favorites",
+    color = 0xF1C40F,
+    description = #lines > 0 and table.concat(lines, "\n") or "No favorites saved.",
+  }
+end
+
+function M.favorites(ctx, action, name, query, options)
+  run(ctx, function()
+    local current_guild_id = guild_id(ctx)
+    if not current_guild_id then return end
+
+    if action == "list" then
+      reply(ctx, "", { embeds = { favorite_embed(settings.get(current_guild_id).favorites) }, ephemeral = true })
+      return
+    end
+
+    name = type(name) == "string" and name:match("^%s*(.-)%s*$") or ""
+    if name == "" then
+      fail(ctx, "Provide a favorite name.")
+      return
+    end
+
+    if action == "create" then
+      query = type(query) == "string" and query:match("^%s*(.-)%s*$") or ""
+      if query == "" then
+        fail(ctx, "Provide a search query or URL to save.")
+        return
+      end
+      local _, err = settings.add_favorite(current_guild_id, name, query, ctx.author and ctx.author.id)
+      if err then
+        fail(ctx, err)
+        return
+      end
+      reply(ctx, "Favorite saved.", { ephemeral = true })
+      return
+    end
+
+    if action == "remove" then
+      local favorite = settings.find_favorite(current_guild_id, name)
+      if not favorite then
+        fail(ctx, "That favorite does not exist.")
+        return
+      end
+      if tostring(favorite.authorId) ~= tostring(ctx.author and ctx.author.id) then
+        fail(ctx, "You can only remove your own favorites.")
+        return
+      end
+      settings.remove_favorite(current_guild_id, name)
+      reply(ctx, "Favorite removed.", { ephemeral = true })
+      return
+    end
+
+    if action == "use" then
+      local favorite = settings.find_favorite(current_guild_id, name)
+      if not favorite then
+        fail(ctx, "That favorite does not exist.")
+        return
+      end
+      M.play(ctx, favorite.query, options)
+      return
+    end
+
+    fail(ctx, "Action must be use, list, create, or remove.")
+  end)
+end
+
+local function can_manage_guild(ctx)
+  local permissions = tonumber(ctx.member_permissions)
+  if not permissions or not bit then return false end
+  return bit.band(permissions, 8) ~= 0 or bit.band(permissions, 32) ~= 0
+end
+
+local function boolean_value(value)
+  value = type(value) == "string" and value:lower():match("^%s*(.-)%s*$") or ""
+  if value == "true" or value == "yes" or value == "on" then return true end
+  if value == "false" or value == "no" or value == "off" then return false end
+  return nil
+end
+
+function M.config(ctx, action, setting, value)
+  run(ctx, function()
+    local current_guild_id = guild_id(ctx)
+    if not current_guild_id then return end
+    local current = settings.get(current_guild_id)
+
+    if action == "get" then
+      reply(ctx, "", {
+        embeds = {{
+          title = "Music settings",
+          color = 0x5865F2,
+          fields = {
+            { name = "Playlist limit", value = tostring(current.playlistLimit), inline = true },
+            { name = "Queue page size", value = tostring(current.defaultQueuePageSize), inline = true },
+            { name = "Default volume", value = tostring(current.defaultVolume) .. "%", inline = true },
+            { name = "Hide queue responses", value = current.queueAddResponseHidden and "On" or "Off", inline = true },
+            { name = "Auto announce", value = current.autoAnnounceNextSong and "On" or "Off", inline = true },
+            { name = "Leave after queue ends", value = tostring(current.waitAfterQueueEmpties) .. "s", inline = true },
+          },
+        }},
+        ephemeral = true,
+      })
+      return
+    end
+
+    if action ~= "set" then
+      fail(ctx, "Action must be get or set.")
+      return
+    end
+    if not can_manage_guild(ctx) then
+      fail(ctx, "You need Manage Server permission to change settings.")
+      return
+    end
+
+    local number = tonumber(value)
+    local updates
+    if setting == "playlist_limit" and number and number >= 1 and number % 1 == 0 then
+      updates = { playlistLimit = number }
+    elseif setting == "queue_page_size" and number and number >= 1 and number <= 30 and number % 1 == 0 then
+      updates = { defaultQueuePageSize = number }
+    elseif setting == "default_volume" and number and number >= 0 and number <= 1000 and number % 1 == 0 then
+      updates = { defaultVolume = number }
+    elseif setting == "queue_add_hidden" then
+      local parsed = boolean_value(value)
+      if parsed ~= nil then updates = { queueAddResponseHidden = parsed } end
+    elseif setting == "auto_announce" then
+      local parsed = boolean_value(value)
+      if parsed ~= nil then updates = { autoAnnounceNextSong = parsed } end
+    elseif setting == "queue_end_delay" and number and number >= 0 and number % 1 == 0 then
+      updates = { waitAfterQueueEmpties = number }
+    end
+
+    if not updates then
+      fail(ctx, "That value is invalid for the selected setting.")
+      return
+    end
+    settings.update(current_guild_id, updates)
+    reply(ctx, "Setting updated.", { ephemeral = true })
   end)
 end
 

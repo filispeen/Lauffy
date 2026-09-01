@@ -1,7 +1,9 @@
 local discord = require("discord.lua")
 local lavalink = require("lavalink.lua")
+local uv = require("uv")
 
 local env = require("./utils/env")
+local settings = require("./services/settings")
 local utils = require("./utils/general")
 local config = env.config()
 
@@ -9,6 +11,13 @@ local bot = discord.Bot(nil, discord.enums.combine_intents(
   discord.enums.INTENTS.GUILDS,
   discord.enums.INTENTS.GUILD_VOICE_STATES
 ))
+
+local get_application_context = bot.get_application_context
+function bot:get_application_context(interaction)
+  local ctx = get_application_context(self, interaction)
+  ctx.member_permissions = interaction.member and interaction.member.permissions
+  return ctx
+end
 
 -- Commands must be registered before bot:run() so discord.lua includes them
 -- in the first automatic command synchronization after READY.
@@ -53,6 +62,13 @@ local function create_lavalink_client()
   end)
   manager:on("trackStart", function(player, track)
     log_track("TRACK", player, track)
+    if settings.get(player.guildId).autoAnnounceNextSong and player.textChannelId then
+      local channel = bot:get_channel(player.textChannelId)
+      if channel then
+        local title = track and track.info and track.info.title or "track"
+        pcall(channel.send, channel, "Now playing: **" .. title .. "**")
+      end
+    end
   end)
   manager:on("trackError", function(player, track, err)
     log_track("ERROR", player, track)
@@ -60,8 +76,18 @@ local function create_lavalink_client()
     player:skip(nil, false)
   end)
   manager:on("queueEnd", function(player)
-    utils.log("TRACK", "Guild %s: queue ended; disconnecting", tostring(player.guildId))
-    player:disconnect(true)
+    local delay = settings.get(player.guildId).waitAfterQueueEmpties
+    if delay == 0 then
+      utils.log("TRACK", "Guild %s: queue ended; staying connected", tostring(player.guildId))
+      return
+    end
+
+    utils.log("TRACK", "Guild %s: queue ended; disconnecting in %ds", tostring(player.guildId), delay)
+    local timer = uv.new_timer()
+    timer:start(delay * 1000, 0, function()
+      if not player.queue.current and player.voiceChannelId then player:disconnect(true) end
+      timer:close()
+    end)
   end)
 
   bot.lavalink = manager

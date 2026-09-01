@@ -34,11 +34,15 @@ local function load_commands(bot)
       assert(type(command.name) == "string" and command.name ~= "", "Command name is required: " .. file)
       assert(type(command.callback) == "function", "Command callback is required: " .. file)
 
-      bot:slash_command(command.name, {
+      local registered = bot:slash_command(command.name, {
         description = command.description,
         options = command.options,
         callback = command.callback,
       })
+      for option_name, callback in pairs(command.autocomplete or {}) do
+        assert(type(callback) == "function", "Autocomplete callback must be a function: " .. file)
+        registered:set_autocomplete(option_name, callback)
+      end
       log("CMD", "Loaded command: %s", command.name)
     end
   end

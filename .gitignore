@@ -8,5 +8,6 @@ deps/
 !README.md
 !LICENSE
 !.docker*
+!.luacheckrc
 !.env.example
 data/

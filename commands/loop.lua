@@ -1,5 +1,5 @@
 local discord = require("discord.lua")
-local music = require("../services/music")
+local interaction = require("../utils/interaction")
 
 return {
   name = "loop",
@@ -18,6 +18,15 @@ return {
     },
   },
   callback = function(ctx)
-    music.loop(ctx, ctx:require_arg("mode"))
+    interaction.run(ctx, function()
+      local player = interaction.controlled_player(ctx)
+      if not player then return end
+      local mode = ctx:require_arg("mode")
+      if mode ~= "off" and mode ~= "track" and mode ~= "queue" then
+        return interaction.fail(ctx, "Loop mode must be off, track, or queue.")
+      end
+      player:setRepeatMode(mode)
+      interaction.reply(ctx, "Loop mode set to " .. mode .. ".")
+    end)
   end,
 }

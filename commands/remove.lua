@@ -1,5 +1,6 @@
 local discord = require("discord.lua")
-local music = require("../services/music")
+local interaction = require("../utils/interaction")
+local validation = require("../utils/validation")
 
 return {
   name = "remove",
@@ -19,6 +20,20 @@ return {
     },
   },
   callback = function(ctx)
-    music.remove(ctx, ctx:require_arg("position"), ctx:get_arg("range", 1))
+    interaction.run(ctx, function()
+      local player = interaction.controlled_player(ctx)
+      if not player then return end
+      local position = validation.positive_integer(ctx:require_arg("position"))
+      local range = validation.positive_integer(ctx:get_arg("range", 1))
+      if not position or not range then
+        return interaction.fail(ctx, "Position and range must be positive integers.")
+      end
+      local finish = position + range - 1
+      if position > player.queue:size() or finish > player.queue:size() then
+        return interaction.fail(ctx, "That queue range does not exist.")
+      end
+      player.queue:remove(position, finish)
+      interaction.reply(ctx, string.format("Removed %d upcoming track%s.", range, range == 1 and "" or "s"))
+    end)
   end,
 }

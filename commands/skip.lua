@@ -1,5 +1,6 @@
 local discord = require("discord.lua")
-local music = require("../services/music")
+local interaction = require("../utils/interaction")
+local validation = require("../utils/validation")
 
 return {
   name = "skip",
@@ -13,6 +14,14 @@ return {
     },
   },
   callback = function(ctx)
-    music.skip(ctx, ctx:get_arg("number", 1))
+    interaction.run(ctx, function()
+      local player = interaction.controlled_player(ctx)
+      if not player then return end
+      local count = validation.positive_integer(ctx:get_arg("number", 1))
+      if not count then return interaction.fail(ctx, "Skip position must be an integer starting at 1.") end
+      if not player.queue.current then return interaction.fail(ctx, "There is no active track.") end
+      player:skip(count, false)
+      interaction.reply(ctx, count == 1 and "Track skipped." or string.format("Skipped to queue position %d.", count))
+    end)
   end,
 }

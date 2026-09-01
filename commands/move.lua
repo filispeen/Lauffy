@@ -1,5 +1,6 @@
 local discord = require("discord.lua")
-local music = require("../services/music")
+local interaction = require("../utils/interaction")
+local validation = require("../utils/validation")
 
 return {
   name = "move",
@@ -19,6 +20,18 @@ return {
     },
   },
   callback = function(ctx)
-    music.move(ctx, ctx:require_arg("from"), ctx:require_arg("to"))
+    interaction.run(ctx, function()
+      local player = interaction.controlled_player(ctx)
+      if not player then return end
+      local from = validation.positive_integer(ctx:require_arg("from"))
+      local to = validation.positive_integer(ctx:require_arg("to"))
+      if not from or not to then return interaction.fail(ctx, "From and to must be positive integers.") end
+      local size = player.queue:size()
+      if from > size or to > size then return interaction.fail(ctx, "That queue position does not exist.") end
+      if from == to then return interaction.fail(ctx, "That track is already at that position.") end
+      local track = player.queue:remove(from)
+      player.queue:addAt(to, track[1])
+      interaction.reply(ctx, string.format("Moved track from %d to %d.", from, to))
+    end)
   end,
 }

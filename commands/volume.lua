@@ -1,5 +1,5 @@
 local discord = require("discord.lua")
-local music = require("../services/music")
+local interaction = require("../utils/interaction")
 
 return {
   name = "volume",
@@ -13,6 +13,15 @@ return {
     },
   },
   callback = function(ctx)
-    music.volume(ctx, ctx:require_arg("level"))
+    interaction.run(ctx, function()
+      local player = interaction.controlled_player(ctx)
+      if not player then return end
+      local level = tonumber(ctx:require_arg("level"))
+      if not level or level < 0 or level > 1000 or level % 1 ~= 0 then
+        return interaction.fail(ctx, "Volume must be an integer between 0 and 1000.")
+      end
+      player:setVolume(level)
+      interaction.reply(ctx, string.format("Volume set to %d%%.", level))
+    end)
   end,
 }

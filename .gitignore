@@ -4,5 +4,6 @@ deps/
 .*/
 .*
 *.md
+!.git*/
 
 !.env.example

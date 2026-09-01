@@ -5,6 +5,54 @@ local general = require("../utils/general")
 local M = {}
 local QUEUE_PAGE_SIZE = 10
 
+local function is_url(value)
+  return value:match("^https?://") ~= nil
+end
+
+local function parse_duration(value)
+  if type(value) ~= "string" then return nil end
+  value = value:lower():match("^%s*(.-)%s*$")
+  if value == "" then return nil end
+
+  if value:match("^%d+$") then
+    return tonumber(value) * 1000
+  end
+
+  local hours, minutes, seconds = value:match("^(%d+):(%d%d):(%d%d)$")
+  if hours then
+    minutes, seconds = tonumber(minutes), tonumber(seconds)
+    if minutes < 60 and seconds < 60 then
+      return (tonumber(hours) * 3600 + minutes * 60 + seconds) * 1000
+    end
+    return nil
+  end
+
+  minutes, seconds = value:match("^(%d+):(%d%d)$")
+  if minutes then
+    seconds = tonumber(seconds)
+    if seconds < 60 then
+      return (tonumber(minutes) * 60 + seconds) * 1000
+    end
+    return nil
+  end
+
+  local total = 0
+  local consumed = ""
+  for amount, unit in value:gmatch("(%d+)([hms])") do
+    local multiplier = unit == "h" and 3600 or (unit == "m" and 60 or 1)
+    total = total + tonumber(amount) * multiplier
+    consumed = consumed .. amount .. unit
+  end
+  if consumed == value then return total * 1000 end
+  return nil
+end
+
+local function positive_integer(value)
+  value = tonumber(value)
+  if not value or value < 1 or value % 1 ~= 0 then return nil end
+  return value
+end
+
 local function reply(ctx, content, options)
   return ctx:respond(content or "", options)
 end
@@ -78,8 +126,7 @@ function M.play(ctx, query)
     local current_guild_id = guild_id(ctx)
     if not current_guild_id then return end
 
-    query = type(query) == "string" and query:match("^%s*(.-)%s*$") or ""
-    if query == "" then
+    if type(query) ~= "string" or not query:match("%S") then
       fail(ctx, "Provide a search query or URL.")
       return
     end
@@ -96,9 +143,10 @@ function M.play(ctx, query)
       return
     end
 
-    -- URLs are passed to Lavalink unchanged. Text queries are resolved by its
-    -- configured YouTube provider; this bot does not download or transcode media.
-    local searched, result = pcall(current_manager.search, current_manager, query, { source = "ytsearch" })
+    local searched, result = pcall(function()
+      if is_url(query) then return current_manager:search(query) end
+      return current_manager:search(query, { source = "ytsearch" })
+    end)
     if not searched then
       general.log("ERROR", "Lavalink search failed: %s", tostring(result))
       fail(ctx, "Lavalink could not find or load that query.")
@@ -169,8 +217,8 @@ function M.skip(ctx, count)
     local player = controlled_player(ctx)
     if not player then return end
 
-    count = tonumber(count) or 1
-    if count < 1 or count % 1 ~= 0 then
+    count = positive_integer(count or 1)
+    if not count then
       fail(ctx, "Skip position must be an integer starting at 1.")
       return
     end
@@ -199,6 +247,161 @@ function M.disconnect(ctx)
     if not player then return end
     player:disconnect(true)
     reply(ctx, "Disconnected from the voice channel.")
+  end)
+end
+
+function M.clear(ctx)
+  run(ctx, function()
+    local player = controlled_player(ctx)
+    if not player then return end
+    if not player.queue.current then
+      fail(ctx, "There is no active track.")
+      return
+    end
+
+    local count = player.queue:size()
+    if count == 0 then
+      fail(ctx, "There are no upcoming tracks to clear.")
+      return
+    end
+
+    player.queue:clear()
+    reply(ctx, string.format("Cleared %d upcoming track%s.", count, count == 1 and "" or "s"))
+  end)
+end
+
+function M.remove(ctx, position, range)
+  run(ctx, function()
+    local player = controlled_player(ctx)
+    if not player then return end
+
+    position = positive_integer(position)
+    range = positive_integer(range or 1)
+    if not position or not range then
+      fail(ctx, "Position and range must be positive integers.")
+      return
+    end
+
+    local size = player.queue:size()
+    local finish = position + range - 1
+    if position > size or finish > size then
+      fail(ctx, "That queue range does not exist.")
+      return
+    end
+
+    player.queue:remove(position, finish)
+    reply(ctx, string.format("Removed %d upcoming track%s.", range, range == 1 and "" or "s"))
+  end)
+end
+
+function M.move(ctx, from, to)
+  run(ctx, function()
+    local player = controlled_player(ctx)
+    if not player then return end
+
+    from = positive_integer(from)
+    to = positive_integer(to)
+    if not from or not to then
+      fail(ctx, "From and to must be positive integers.")
+      return
+    end
+
+    local size = player.queue:size()
+    if from > size or to > size then
+      fail(ctx, "That queue position does not exist.")
+      return
+    end
+    if from == to then
+      fail(ctx, "That track is already at that position.")
+      return
+    end
+
+    local track = player.queue:remove(from)
+    player.queue:addAt(to, track[1])
+    reply(ctx, string.format("Moved track from %d to %d.", from, to))
+  end)
+end
+
+local function seek_to(ctx, player, position)
+  local track = player.queue.current
+  if not track then
+    fail(ctx, "There is no active track.")
+    return false
+  end
+  if track.info and track.info.isStream then
+    fail(ctx, "Live streams cannot be seeked.")
+    return false
+  end
+
+  local length = track.info and track.info.length
+  if type(length) == "number" and position > length then
+    fail(ctx, "That position is beyond the end of the track.")
+    return false
+  end
+
+  player:seek(position)
+  return true
+end
+
+function M.seek(ctx, duration)
+  run(ctx, function()
+    local player = controlled_player(ctx)
+    if not player then return end
+
+    local position = parse_duration(duration)
+    if not position then
+      fail(ctx, "Use a duration such as 90, 1m30s, or 01:30.")
+      return
+    end
+
+    if seek_to(ctx, player, position) then
+      reply(ctx, "Seeked to " .. format.duration(position) .. ".")
+    end
+  end)
+end
+
+function M.fseek(ctx, duration)
+  run(ctx, function()
+    local player = controlled_player(ctx)
+    if not player then return end
+
+    local offset = parse_duration(duration)
+    if not offset then
+      fail(ctx, "Use a duration such as 90, 1m30s, or 01:30.")
+      return
+    end
+
+    local position = player:getPosition() + offset
+    if seek_to(ctx, player, position) then
+      reply(ctx, "Seeked forward to " .. format.duration(position) .. ".")
+    end
+  end)
+end
+
+function M.replay(ctx)
+  run(ctx, function()
+    local player = controlled_player(ctx)
+    if not player then return end
+    if seek_to(ctx, player, 0) then reply(ctx, "Track restarted.") end
+  end)
+end
+
+function M.unskip(ctx)
+  run(ctx, function()
+    local player = controlled_player(ctx)
+    if not player then return end
+
+    local previous = table.remove(player.queue.previous, 1)
+    if not previous then
+      fail(ctx, "There is no previous track.")
+      return
+    end
+
+    if player.queue.current then player.queue:addAt(1, player.queue.current) end
+    player.queue.current = previous
+    player.position = 0
+    player:play()
+    reply(ctx, "Returned to the previous track.")
   end)
 end
 

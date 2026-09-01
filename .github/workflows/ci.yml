@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint:
+    name: Lint with luacheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua/LuaRocks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 liblua5.1-0-dev luarocks libsodium-dev
+      - name: Install luacheck
+        run: sudo luarocks install luacheck
+
+      - name: Run luacheck
+        run: luacheck --no-unused-args .
+
+  discord-notify:
+    name: Discord nitification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Send notification
+        uses: filispeen/discord-notifier@v1
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}

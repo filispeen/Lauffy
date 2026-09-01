@@ -1,10 +1,11 @@
-!README.md
-!LICENSE
+
 deps/
 .*/
 .*
 *.md
 !.git*/
 
+!README.md
+!LICENSE
 !.env.example
 data/

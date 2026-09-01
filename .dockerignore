@@ -1,12 +1,9 @@
-
 deps/
 .*/
 .*
 *.md
-!.git*/
 
 !README.md
 !LICENSE
-!.docker*
 !.env.example
 data/

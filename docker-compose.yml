@@ -1,0 +1,27 @@
+services:
+  discord-bot:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      LAVALINK_HOST: lavalink
+    depends_on:
+      - lavalink
+    volumes:
+      - lauffy-data:/app/data
+
+  lavalink:
+    build:
+      context: .
+      dockerfile: Dockerfile.lavalink
+    image: lauffy-lavalink:local
+    restart: unless-stopped
+    environment:
+      LAVALINK_SERVER_PASSWORD: ${LAVALINK_PASS:-youshallnotpass}
+    volumes:
+      - ./application.yml:/opt/Lavalink/application.yml:ro
+
+volumes:
+  lauffy-data:

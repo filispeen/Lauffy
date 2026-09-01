@@ -1,6 +1,6 @@
 # Lauffy
 
-Lauffy is a Discord slash-command music bot written in Lua for Luvit runtime. It uses `discord.lua` for Discord interactions and Lavalink for search, track metadata, queue playback, and voice connections and etc.
+Lauffy is a Discord slash-command music bot written in Lua for the Luvit runtime. It uses `discord.lua` for Discord interactions and Lavalink for search, track metadata, queue playback, and voice connections.
 
 ## Features
 
@@ -17,7 +17,7 @@ Lauffy is a Discord slash-command music bot written in Lua for Luvit runtime. It
 - A Discord application and bot token.
 - A reachable Lavalink node with a password that matches `LAVALINK_PASS`. The node must support `ytsearch` for text searches and any URL providers you plan to use.
 - Discord permissions appropriate for the target channels, including viewing channels, connecting, speaking, and sending messages.
- - `filispeen/discord.lua@v1.0.2` and `filispeen/lavalink.lua@v0.3.5`.
+- The Lua dependencies declared in `package.lua`, installed with Lit.
 
 ## Installation
 
@@ -32,7 +32,7 @@ Edit `.env` before starting the bot. Environment variables already set by the ho
 
 ## Configuration
 
-Use `.env.example` as the envoriment example. Create `.env` file and set your env variables.
+Use `.env.example` as a template. Create `.env` and set its variables.
 
 ```dotenv
 TOKEN=<your_discord_bot_token>
@@ -61,6 +61,44 @@ luvit main.lua
 ```
 
 Commands are registered before the bot starts, so `discord.lua` can synchronize the slash commands after the Discord READY event.
+
+## Docker
+
+Both Compose configurations persist guild settings and favorites in the `lauffy-data` Docker volume.
+
+### Bot with bundled Lavalink
+
+Set `TOKEN` and `LAVALINK_PASS` in `.env`. The Compose file supplies `LAVALINK_HOST=lavalink` and starts a Lavalink container with the same password.
+
+```sh
+docker compose up --build -d
+docker compose logs -f
+```
+
+To stop the stack, run:
+
+```sh
+docker compose down
+```
+
+The bundled Lavalink image checks Maven for the newest stable `youtube-plugin` version every time it starts. It uses the pinned version in `application.yml` if the version check fails; the tracked configuration file is never modified.
+
+### Bot with external Lavalink
+
+Set `TOKEN`, `LAVALINK_HOST`, `LAVALINK_PORT`, `LAVALINK_PASS`, and `LAVALINK_SECURE` in `.env` for the external node, then run:
+
+```sh
+docker compose -f docker-compose.external-lavalink.yml up --build -d
+docker compose -f docker-compose.external-lavalink.yml logs -f
+```
+
+This configuration starts only the bot. It does not create or connect to a local Docker Lavalink service.
+
+To stop it, run:
+
+```sh
+docker compose -f docker-compose.external-lavalink.yml down
+```
 
 ## Commands
 

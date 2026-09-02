@@ -1,46 +1,16 @@
 local discord = require("discord.lua")
 local lavalink = require("lavalink.lua")
 local uv = require("uv")
-local http = require("coro-http")
-local json = require("json")
 
 local env = require("./utils/env")
 local settings = require("./services/settings")
 local utils = require("./utils/general")
 local config = env.config()
-local interaction_dispatch_registered = false
 
 local bot = discord.Bot(nil, discord.enums.combine_intents(
   discord.enums.INTENTS.GUILDS,
   discord.enums.INTENTS.GUILD_VOICE_STATES
 ))
-
-local function install_interaction_response_transport()
-  local rest = bot.client and bot.client.rest
-  if not rest then return end
-
-  function rest:create_interaction_response(interaction_id, interaction_token, payload, files)
-    if files and #files > 0 then
-      error("Interaction response files are not supported by this transport.")
-    end
-
-    local url = string.format(
-      "https://discord.com/api/v10/interactions/%s/%s/callback",
-      tostring(interaction_id), tostring(interaction_token)
-    )
-    local ok, response, body = pcall(http.request, "POST", url, {
-      { "Content-Type", "application/json" },
-      { "User-Agent", "Lauffy" },
-    }, json.encode(payload))
-    if not ok then
-      error("Discord interaction response request failed: " .. tostring(response))
-    end
-    if response.code >= 400 then
-      error(string.format("Discord interaction response HTTP %d: %s", response.code, tostring(body)))
-    end
-    return body
-  end
-end
 
 local get_application_context = bot.get_application_context
 function bot:get_application_context(interaction)
@@ -127,23 +97,12 @@ local function create_lavalink_client()
   return manager
 end
 
-bot:on("application_command_error", function(_, ctx, err)
+bot:on("application_command_error", function(ctx, err)
   utils.log("ERROR", "Slash command failed: %s", tostring(err))
   pcall(ctx.respond, ctx, "An internal error occurred while running this command.", { ephemeral = true })
 end)
 
 bot:on("ready", function()
-  install_interaction_response_transport()
-
-  if not interaction_dispatch_registered then
-    bot.client.gateway:on_dispatch("INTERACTION_CREATE", function(interaction)
-      utils.log("DEBUG", "Received interaction type %s", tostring(interaction and interaction.type))
-      local ok, err = pcall(bot.dispatch_interaction, bot, interaction)
-      if not ok then utils.log("ERROR", "Interaction dispatch failed: %s", tostring(err)) end
-    end)
-    interaction_dispatch_registered = true
-  end
-
   utils.log("BOT", "Logged in as %s (id: %s)", bot.user.username, bot.user.id)
   create_lavalink_client()
 end)

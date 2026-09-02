@@ -7,13 +7,22 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-ARG LUVI_VERSION=2.14.0
-ARG LIT_VERSION=3.8.5
-
 RUN curl -fsSL https://github.com/luvit/lit/raw/master/get-lit.sh | sh
 
 COPY package.lua ./
-RUN ./lit install
+
+RUN attempt=1; \
+    max_attempts=5; \
+    until ./lit install; do \
+      if [ "$attempt" -ge "$max_attempts" ]; then \
+        echo "lit install failed after $max_attempts attempts" >&2; \
+        exit 1; \
+      fi; \
+      delay=$((attempt * 5)); \
+      echo "lit install failed; retrying in ${delay}s (attempt $((attempt + 1))/$max_attempts)" >&2; \
+      sleep "$delay"; \
+      attempt=$((attempt + 1)); \
+    done
 
 FROM gcr.io/distroless/cc-debian12
 

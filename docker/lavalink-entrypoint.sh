@@ -15,4 +15,4 @@ else
   printf '%s\n' "Could not resolve the latest youtube-plugin version; using application.yml."
 fi
 
-exec java -jar Lavalink.jar --spring.config.additional-location="file:${config_file}"
+exec java -Xms64M -Xmx350M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:+ParallelRefProcEnabled -jar Lavalink.jar --spring.config.additional-location="file:${config_file}"

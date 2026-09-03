@@ -8,7 +8,7 @@ return {
   homepage = "https://github.com/filispeen/Lauffy",
   dependencies = {
     "filispeen/discord.lua@v1.0.3",
-    "filispeen/lavalink.lua@v0.3.5"
+    "filispeen/lavalink.lua@v0.4.5"
   },
   files = {
     "main.lua",

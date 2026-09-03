@@ -1,11 +1,11 @@
 # Lauffy
 
-Lauffy is a Discord slash-command music bot written in Lua for the Luvit runtime. It uses `discord.lua` for Discord interactions and Lavalink for search, track metadata, queue playback, and voice connections.
+Lauffy is a Discord slash-command music bot written in Lua for the Luvit runtime. It uses `discord.lua` for Discord interactions and NodeLink v3 as its audio service through the Lavalink API v4.
 
 ## Features
 
 - Slash commands with `/play` search autocomplete.
-- Lavalink-backed text search, URL loading, playlists, queueing, and playback.
+- NodeLink-backed text search, URL loading, playlists, queueing, and playback.
 - Per-guild favorites and music settings stored on disk.
 - Queue browsing, movement, removal, clearing, shuffle, loop modes, seeking, and volume controls.
 - Optional now-playing announcements and delayed disconnect after the queue ends.
@@ -15,7 +15,7 @@ Lauffy is a Discord slash-command music bot written in Lua for the Luvit runtime
 
 - [Luvit](https://luvit.io/) and Lit, its package manager.
 - A Discord application and bot token.
-- A reachable Lavalink node with a password that matches `LAVALINK_PASS`. The node must support `ytsearch` for text searches and any URL providers you plan to use.
+- NodeLink v3 with a password that matches `NODELINK_PASSWORD`. The bundled Compose stack supplies it; for an external node, it must expose the Lavalink API v4.
 - Discord permissions appropriate for the target channels, including viewing channels, connecting, speaking, and sending messages.
 - The Lua dependencies declared in `package.lua`, installed with Lit.
 
@@ -37,22 +37,26 @@ Use `.env.example` as a template. Create `.env` and set its variables.
 ```dotenv
 TOKEN=<your_discord_bot_token>
 
-LAVALINK_HOST=localhost
-LAVALINK_PORT=2333
-LAVALINK_PASS=<your_lavalink_password>
-LAVALINK_SECURE=false
+NODELINK_HOST=localhost
+NODELINK_PORT=2333
+NODELINK_PASSWORD=<a_long_random_password>
+NODELINK_TLS=false
+NODELINK_API_VERSION=4
+NODELINK_SEARCH_SOURCE=ytmsearch
 
-LAVALINK_RESUME=true
-LAVALINK_RESUME_TIMEOUT=60
-LAVALINK_RECONNECT_TRIES=5
-LAVALINK_RECONNECT_DELAY=5000
+NODELINK_RESUME=true
+NODELINK_RESUME_TIMEOUT=60
+NODELINK_RECONNECT_TRIES=5
+NODELINK_RECONNECT_DELAY=5000
 ```
 
-## Lavalink
+## NodeLink and Lavalink API v4
 
-Run Lavalink separately, then point Lauffy at it through the variables above. Lauffy connects after Discord signals that the bot is ready. If the node is unreachable, commands respond that Lavalink is not ready.
+Lauffy pins `filispeen/lavalink.lua` v0.4.0 and explicitly sets `apiVersion = 4`. Its audio client uses `wss?://HOST:PORT/v4/websocket`, `GET /v4/loadtracks`, and player/session calls below `/v4/sessions/...`; it never uses NodeLink `/v3` routes. The discord.lua integration forwards both Discord `VOICE_STATE_UPDATE` and `VOICE_SERVER_UPDATE` gateway events to the player automatically.
 
-Lauffy does not download, cache, transcode, or play media locally. Plain-text input is sent to Lavalink as a YouTube search with `ytsearch`; HTTP and HTTPS URLs are sent to Lavalink unchanged. Lavalink resolves the tracks and performs playback.
+The WebSocket session is resumed when `NODELINK_RESUME=true`. Failed sockets use the configured reconnect count and exponential reconnect delay. Node, session, reconnect, REST/info, and player errors are logged with a NodeLink-specific prefix.
+
+Plain-text input uses `NODELINK_SEARCH_SOURCE`, which defaults to `ytmsearch`. Set it to `spsearch` when you specifically want NodeLink's Spotify search, `ytsearch` for YouTube, or `search` for NodeLink's unified search. HTTP and HTTPS URLs are sent unchanged, so NodeLink can load tracks and playlists from enabled providers.
 
 ## Run
 
@@ -66,12 +70,13 @@ Commands are registered before the bot starts, so `discord.lua` can synchronize 
 
 Both Compose configurations persist guild settings and favorites in the `lauffy-data` Docker volume.
 
-### Bot with bundled Lavalink
+### Bot with bundled NodeLink v3
 
-Set `TOKEN` and `LAVALINK_PASS` in `.env`. The Compose file supplies `LAVALINK_HOST=lavalink` and starts a Lavalink container with the same password.
+Copy the template, set `TOKEN` and replace `NODELINK_PASSWORD` with a long random value. Do not reuse a real secret from another system.
 
 ```sh
-docker compose up --build -d
+cp .env.example .env
+docker compose up -d --build
 docker compose logs -f
 ```
 
@@ -81,18 +86,18 @@ To stop the stack, run:
 docker compose down
 ```
 
-The bundled Lavalink image checks Maven for the newest stable `youtube-plugin` version every time it starts. It uses the pinned version in `application.yml` if the version check fails; the tracked configuration file is never modified.
+The `nodelink` service is pinned to `performanc/nodelink:v3.3.0` and mounts [nodelink/config.js](nodelink/config.js). Its HTTP/WebSocket port is published only on `127.0.0.1` for local diagnostics; the bot uses the private Compose network. The health check waits for `/version` before the bot starts. Set `NODELINK_SPONSORBLOCK_ENABLED=true` only after basic playback works; NodeLink filters remain available through its Lavalink v4 player endpoints.
 
-### Bot with external Lavalink
+### Bot with external NodeLink
 
-Set `TOKEN`, `LAVALINK_HOST`, `LAVALINK_PORT`, `LAVALINK_PASS`, and `LAVALINK_SECURE` in `.env` for the external node, then run:
+Set `TOKEN`, `NODELINK_HOST`, `NODELINK_PORT`, `NODELINK_PASSWORD`, `NODELINK_TLS`, and `NODELINK_API_VERSION=4` in `.env`, then run the bot-only Compose configuration:
 
 ```sh
-docker compose -f docker-compose.external-lavalink.yml up --build -d
+docker compose -f docker-compose.external-lavalink.yml up -d --build
 docker compose -f docker-compose.external-lavalink.yml logs -f
 ```
 
-This configuration starts only the bot. It does not create or connect to a local Docker Lavalink service.
+This compatibility-named configuration starts only the bot. It does not create a local NodeLink service.
 
 To stop it, run:
 
@@ -108,10 +113,10 @@ All commands are guild-only. `/play` and `/favorites use` require you to be in a
 
 | Command | Options | Behavior |
 | --- | --- | --- |
-| `/play` | `query` (required), `immediate`, `shuffle`, `skip` | Searches a query or loads a URL. `immediate` adds tracks to the front, `shuffle` shuffles playlist tracks, and `skip` advances after adding. |
+| `/play` | `query` (required), `immediate`, `shuffle`, `skip` | Searches a query or loads a URL/playlist. `immediate` adds tracks to the front, `shuffle` shuffles playlist tracks, and `skip` advances after adding. |
 | `/favorites` | `action` (required: `use`, `list`, `create`, `remove`), `name`, `query`, `immediate`, `shuffle`, `skip` | Saves, lists, removes, or queues a per-guild favorite. `use` accepts the same queue options as `/play`; `create` needs `name` and `query`. Users can remove only their own favorites. |
 
-`/play` autocomplete runs a Lavalink `ytsearch` for non-empty text and returns up to 10 distinct track URLs. It does not suggest URLs. Favorite-name autocomplete returns up to 25 matching saved favorites; for `remove`, it shows only the caller's favorites.
+`/play` autocomplete uses the configured NodeLink source for non-empty text and returns up to 10 distinct track URLs. It does not suggest URLs. Favorite-name autocomplete returns up to 25 matching saved favorites; for `remove`, it shows only the caller's favorites.
 
 ### Queue and playback
 
@@ -127,6 +132,8 @@ All commands are guild-only. `/play` and `/favorites use` require you to be in a
 | `/unskip` | none | Returns to the previous track when one is available. |
 | `/pause` and `/resume` | none | Pause or resume playback. |
 | `/stop` | none | Stops playback and clears the queue. |
+| `/join` | none | Joins the caller's voice channel without starting playback. |
+| `/leave` | none | Leaves the current voice channel. |
 | `/disconnect` | none | Leaves the current voice channel. |
 | `/replay` | none | Restarts the current track. |
 | `/seek` | `time` (required) | Seeks to an absolute position. |
@@ -150,7 +157,7 @@ Settings and favorites are stored per guild in `data/guild-settings.json`, relat
 ## Troubleshooting
 
 - **`TOKEN is required`**: Set `TOKEN` in `.env` or in the process environment.
-- **Lavalink is not ready**: Start Lavalink, verify the host, port, secure flag, and password, then confirm the node supports the requested source.
-- **No tracks found**: Check the query or URL and Lavalink's provider support.
+- **NodeLink is not ready**: Run `docker compose logs nodelink`, verify the host, port, TLS flag, API version `4`, and password, then confirm the node supports the requested source.
+- **No tracks found**: Check the query or URL and NodeLink's enabled provider support.
 - **Voice-channel error**: Join a voice channel before `/play` or `/favorites use`. To control an existing player, join the bot's channel first.
 - **Commands do not appear**: Confirm the bot is online and the application is installed in the target guild; command synchronization runs after READY.

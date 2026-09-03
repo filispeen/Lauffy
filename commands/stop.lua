@@ -8,6 +8,7 @@ return {
       local player = interaction.controlled_player(ctx)
       if not player then return end
       player:stopPlaying(true)
+      player:disconnect(true)
       interaction.reply(ctx, "Playback stopped and the queue was cleared.")
     end)
   end,

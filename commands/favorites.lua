@@ -141,11 +141,11 @@ return {
       end
       local searched, result = pcall(function()
         if is_url(favorite.query) then return manager:search(favorite.query) end
-        return manager:search(favorite.query, { source = "ytsearch" })
+        return manager:search(favorite.query, { source = interaction.search_source(ctx) })
       end)
       if not searched then
-        general.log("ERROR", "Lavalink search failed: %s", tostring(result))
-        return interaction.fail(ctx, "Lavalink could not find or load that query.")
+        general.log("ERROR", "NodeLink search failed: %s", tostring(result))
+        return interaction.fail(ctx, "NodeLink could not find or load that query.")
       end
       local found = lavalink.utils.splitSearchResult(result.loadType, result)
       if #found == 0 then return interaction.fail(ctx, "No tracks found.") end

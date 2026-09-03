@@ -18,7 +18,7 @@ services:
       - lauffy-data:/app/data
 
   nodelink:
-    image: performanc/nodelink:v3.3.0
+    image: docker.io/performanc/nodelink:v3.3.0
     restart: unless-stopped
     environment:
       NODELINK_SERVER_HOST: "0.0.0.0"

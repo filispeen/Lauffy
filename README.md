@@ -86,7 +86,6 @@ To stop the stack, run:
 docker compose down
 ```
 
-The `nodelink` service is pinned to `performanc/nodelink:v3.3.0` and mounts [nodelink/config.js](nodelink/config.js). Its HTTP/WebSocket port is published only on `127.0.0.1` for local diagnostics; the bot uses the private Compose network. The health check waits for `/version` before the bot starts. Set `NODELINK_SPONSORBLOCK_ENABLED=true` only after basic playback works; NodeLink filters remain available through its Lavalink v4 player endpoints.
 
 ### Bot with external NodeLink
 

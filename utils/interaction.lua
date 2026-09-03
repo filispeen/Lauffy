@@ -14,7 +14,7 @@ function M.run(ctx, callback)
   local ok, err = pcall(callback)
   if not ok then
     general.log("ERROR", "Command failed: %s", tostring(err))
-    pcall(M.fail, ctx, "Lavalink could not complete this command.")
+    pcall(M.fail, ctx, "NodeLink could not complete this command.")
   end
 end
 
@@ -29,7 +29,7 @@ end
 function M.manager(ctx)
   local manager = ctx.bot and ctx.bot.lavalink
   if not manager then
-    M.fail(ctx, "Lavalink is not ready yet. Please try again in a few seconds.")
+    M.fail(ctx, "NodeLink is not ready yet. Please try again in a few seconds.")
     return nil
   end
   return manager

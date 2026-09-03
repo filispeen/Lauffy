@@ -23,9 +23,7 @@ services:
     environment:
       NODELINK_SERVER_HOST: "0.0.0.0"
       NODELINK_SERVER_PORT: "2333"
-      # LAVALINK_PASS is accepted only as a migration fallback for an existing
-      # local .env; new deployments must use NODELINK_PASSWORD.
-      NODELINK_SERVER_PASSWORD: ${NODELINK_PASSWORD:-${LAVALINK_PASS:?Set NODELINK_PASSWORD in .env}}
+      NODELINK_SERVER_PASSWORD: ${NODELINK_PASSWORD:?Set NODELINK_PASSWORD in .env}
       NODELINK_LOGGING_LEVEL: ${NODELINK_LOGGING_LEVEL:-info}
       NODELINK_SPONSORBLOCK_ENABLED: ${NODELINK_SPONSORBLOCK_ENABLED:-false}
     volumes:

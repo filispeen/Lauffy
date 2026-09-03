@@ -1,5 +1,4 @@
-# Backward-compatible filename. This stack connects the bot to an external
-# NodeLink v3 instance using NODELINK_* variables from .env (Lavalink API v4).
+# Bot-only profile for a separately hosted NodeLink v3 instance (Lavalink API v4).
 services:
   discord-bot:
     build:

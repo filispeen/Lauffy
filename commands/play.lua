@@ -27,7 +27,7 @@ local function autocomplete(ctx)
     return manager:search(query, { source = interaction.search_source(ctx) })
   end)
   if not ok then
-    general.log("WARN", "Lavalink autocomplete failed: %s", tostring(result))
+    general.log("WARN", "NodeLink autocomplete failed: %s", tostring(result))
     return autocomplete_response(ctx, {})
   end
   local choices, values = {}, {}
@@ -48,7 +48,7 @@ end
 
 return {
   name = "play",
-  description = "Play a Lavalink search query or URL",
+  description = "Play a NodeLink search query or URL",
   options = {
     {
       name = "query",

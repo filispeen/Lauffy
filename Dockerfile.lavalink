@@ -1,8 +1,0 @@
-FROM ghcr.io/lavalink-devs/lavalink:4.2.2
-
-USER root
-COPY docker/lavalink-entrypoint.sh /usr/local/bin/lavalink-entrypoint
-RUN chmod 755 /usr/local/bin/lavalink-entrypoint
-
-USER lavalink
-ENTRYPOINT ["/usr/local/bin/lavalink-entrypoint"]

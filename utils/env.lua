@@ -54,15 +54,19 @@ local function required_string(value, name)
   return normalized
 end
 
+local function env_value(primary, legacy)
+  return process.env[primary] or (legacy and process.env[legacy])
+end
+
 local function config()
   load()
 
-  local port = number(process.env.NODELINK_PORT, 2333, "NODELINK_PORT")
+  local port = number(env_value("NODELINK_PORT", "LAVALINK_PORT"), 2333, "NODELINK_PORT")
   if port < 1 or port > 65535 or port % 1 ~= 0 then
     error("NODELINK_PORT must be an integer between 1 and 65535")
   end
 
-  local api_version = number(process.env.NODELINK_API_VERSION, 4,
+  local api_version = number(env_value("NODELINK_API_VERSION", "LAVALINK_API_VERSION"), 4,
     "NODELINK_API_VERSION")
   if api_version ~= 4 then
     error("NODELINK_API_VERSION must be 4: NodeLink v3 only supports Lavalink API v4")
@@ -82,18 +86,18 @@ local function config()
   return {
     token = required_string(process.env.TOKEN, "TOKEN"),
     nodelink = {
-      host = string_value(process.env.NODELINK_HOST, "localhost"),
+      host = string_value(env_value("NODELINK_HOST", "LAVALINK_HOST"), "localhost"),
       port = port,
-      authorization = required_string(process.env.NODELINK_PASSWORD, "NODELINK_PASSWORD"),
-      secure = boolean(process.env.NODELINK_TLS, false, "NODELINK_TLS"),
+      authorization = required_string(env_value("NODELINK_PASSWORD", "LAVALINK_PASS"), "NODELINK_PASSWORD"),
+      secure = boolean(env_value("NODELINK_TLS", "LAVALINK_SECURE"), false, "NODELINK_TLS"),
       apiVersion = api_version,
       searchSource = search_source,
-      resuming = boolean(process.env.NODELINK_RESUME, true, "NODELINK_RESUME"),
-      resumeTimeout = number(process.env.NODELINK_RESUME_TIMEOUT, 60,
+      resuming = boolean(env_value("NODELINK_RESUME", "LAVALINK_RESUME"), true, "NODELINK_RESUME"),
+      resumeTimeout = number(env_value("NODELINK_RESUME_TIMEOUT", "LAVALINK_RESUME_TIMEOUT"), 60,
         "NODELINK_RESUME_TIMEOUT"),
-      reconnectTries = number(process.env.NODELINK_RECONNECT_TRIES, 5,
+      reconnectTries = number(env_value("NODELINK_RECONNECT_TRIES", "LAVALINK_RECONNECT_TRIES"), 5,
         "NODELINK_RECONNECT_TRIES"),
-      reconnectDelay = number(process.env.NODELINK_RECONNECT_DELAY, 5000,
+      reconnectDelay = number(env_value("NODELINK_RECONNECT_DELAY", "LAVALINK_RECONNECT_DELAY"), 5000,
         "NODELINK_RECONNECT_DELAY"),
     },
   }
@@ -104,6 +108,7 @@ return {
   boolean = boolean,
   number = number,
   string = string_value,
+  env_value = env_value,
   required_string = required_string,
   config = config,
 }

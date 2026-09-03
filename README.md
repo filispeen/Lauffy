@@ -93,16 +93,16 @@ The `nodelink` service is pinned to `performanc/nodelink:v3.3.0` and mounts [nod
 Set `TOKEN`, `NODELINK_HOST`, `NODELINK_PORT`, `NODELINK_PASSWORD`, `NODELINK_TLS`, and `NODELINK_API_VERSION=4` in `.env`, then run the bot-only Compose configuration:
 
 ```sh
-docker compose -f docker-compose.external-nodelink.yml up -d --build
-docker compose -f docker-compose.external-nodelink.yml logs -f
+docker compose -f docker-compose.external-lavalink.yml up -d --build
+docker compose -f docker-compose.external-lavalink.yml logs -f
 ```
 
-This configuration starts only the bot. It does not create a local NodeLink service.
+This compatibility-named configuration starts only the bot. It does not create a local NodeLink service.
 
 To stop it, run:
 
 ```sh
-docker compose -f docker-compose.external-nodelink.yml down
+docker compose -f docker-compose.external-lavalink.yml down
 ```
 
 ## Commands

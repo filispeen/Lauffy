@@ -49,7 +49,7 @@ end
 
 return {
   name = "favorites",
-  description = "Save and play favorite NodeLink queries",
+  description = "Save and play favorite Lavalink queries",
   options = {
     {
       name = "action",

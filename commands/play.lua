@@ -24,7 +24,7 @@ local function autocomplete(ctx)
   local manager = ctx.bot and ctx.bot.lavalink
   if not manager then return autocomplete_response(ctx, {}) end
   local ok, result = pcall(function()
-    return manager:search(query, { source = interaction.search_source(ctx) })
+    return manager:search(query, { source = "ytsearch" })
   end)
   if not ok then
     general.log("WARN", "Lavalink autocomplete failed: %s", tostring(result))
@@ -96,11 +96,11 @@ return {
       end
       local searched, result = pcall(function()
         if is_url(query) then return manager:search(query) end
-        return manager:search(query, { source = interaction.search_source(ctx) })
+        return manager:search(query, { source = "ytsearch" })
       end)
       if not searched then
-        general.log("ERROR", "NodeLink search failed: %s", tostring(result))
-        return interaction.fail(ctx, "NodeLink could not find or load that query.")
+        general.log("ERROR", "Lavalink search failed: %s", tostring(result))
+        return interaction.fail(ctx, "Lavalink could not find or load that query.")
       end
       local found = lavalink.utils.splitSearchResult(result.loadType, result)
       if #found == 0 then return interaction.fail(ctx, "No tracks found.") end

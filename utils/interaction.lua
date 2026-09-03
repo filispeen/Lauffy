@@ -35,10 +35,6 @@ function M.manager(ctx)
   return manager
 end
 
-function M.search_source(ctx)
-  return (ctx and ctx.bot and ctx.bot.musicSearchSource) or "ytmsearch"
-end
-
 function M.author_voice_channel(ctx, guild_id)
   local author = ctx.author
   local channel_id = author and ctx.bot:get_voice_channel_id(guild_id, author.id)

@@ -28,55 +28,33 @@ local function log_track(level, player, track)
   utils.log(level, "Guild %s: %s", tostring(player.guildId), tostring(title))
 end
 
-local function create_nodelink_client()
+local function create_lavalink_client()
   if bot.lavalink then return bot.lavalink end
 
   local manager = lavalink.discord(bot, {
     clientName = "lauffy/" .. bot.user.id,
-    -- NodeLink v3 is Lavalink API v4 compatible.  Do not downgrade this
-    -- value: v3 routes are intentionally unsupported by this application.
-    apiVersion = config.nodelink.apiVersion,
     nodes = {
       {
         id = "main",
-        host = config.nodelink.host,
-        port = config.nodelink.port,
-        authorization = config.nodelink.authorization,
-        secure = config.nodelink.secure,
-        apiVersion = config.nodelink.apiVersion,
-        resuming = config.nodelink.resuming,
-        resumeTimeout = config.nodelink.resumeTimeout,
-        reconnectTries = config.nodelink.reconnectTries,
-        reconnectDelay = config.nodelink.reconnectDelay,
+        host = config.lavalink.host,
+        port = config.lavalink.port,
+        authorization = config.lavalink.authorization,
+        secure = config.lavalink.secure,
+        resuming = config.lavalink.resuming,
+        resumeTimeout = config.lavalink.resumeTimeout,
+        reconnectTries = config.lavalink.reconnectTries,
+        reconnectDelay = config.lavalink.reconnectDelay,
       },
     },
     playerOptions = { defaultVolume = 100 },
   })
-  -- The v0.4 discord.lua integration subscribes to voice_state_update and
-  -- voice_server_update and forwards both payloads to this manager.
 
   manager:on("nodeReady", function(node, resumed, session_id)
-    utils.log("NODE", "NodeLink %s ready (resumed: %s, session: %s)",
+    utils.log("NODE", "Node %s ready (resumed: %s, session: %s)",
       node.options.id, tostring(resumed), tostring(session_id))
   end)
-  manager:on("nodeConnect", function(node)
-    utils.log("NODE", "NodeLink %s WebSocket connected at /v4/websocket", node.options.id)
-  end)
-  manager:on("nodeDisconnect", function(node, reason)
-    utils.log("WARN", "NodeLink %s disconnected: %s", node.options.id, tostring(reason or "connection closed"))
-  end)
-  manager:on("nodeReconnecting", function(node, attempt, delay)
-    utils.log("NODE", "NodeLink %s reconnect %d in %dms", node.options.id, attempt, delay)
-  end)
   manager:on("nodeError", function(node, err)
-    utils.log("ERROR", "NodeLink %s error: %s", node.options.id, tostring(err))
-  end)
-  manager:on("nodeInfoError", function(node, err)
-    utils.log("WARN", "NodeLink %s /v4/info check failed: %s", node.options.id, tostring(err))
-  end)
-  manager:on("nodeLinkReady", function(node, info)
-    utils.log("NODE", "Confirmed NodeLink v3 on %s (version: %s)", node.options.id,
-      tostring(info and info.version or "unknown"))
+    utils.log("ERROR", "Node %s error: %s", node.options.id, tostring(err))
   end)
   manager:on("error", function(player, err)
     utils.log("ERROR", "Guild %s player error: %s",
@@ -94,7 +72,7 @@ local function create_nodelink_client()
   end)
   manager:on("trackError", function(player, track, err)
     log_track("ERROR", player, track)
-    utils.log("ERROR", "Guild %s: NodeLink track error: %s", tostring(player.guildId), tostring(err))
+    utils.log("ERROR", "Guild %s: Lavalink track error: %s", tostring(player.guildId), tostring(err))
     player:skip(nil, false)
   end)
   manager:on("queueEnd", function(player)
@@ -113,7 +91,6 @@ local function create_nodelink_client()
   end)
 
   bot.lavalink = manager
-  bot.musicSearchSource = config.nodelink.searchSource
   -- Slash command contexts expose discord.lua's underlying Client.
   bot.client.lavalink = manager
   manager:init()
@@ -127,7 +104,7 @@ end)
 
 bot:on("ready", function()
   utils.log("BOT", "Logged in as %s (id: %s)", bot.user.username, bot.user.id)
-  create_nodelink_client()
+  create_lavalink_client()
 end)
 
 bot:run(config.token)

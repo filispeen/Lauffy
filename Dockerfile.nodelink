@@ -1,0 +1,26 @@
+FROM node:25-alpine AS builder
+
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+RUN git clone --branch dev --depth 1 https://github.com/PerformanC/NodeLink.git .
+
+RUN npm install --ignore-scripts
+
+FROM node:25-alpine
+
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/config.js ./config.js
+COPY --from=builder /app/package.json ./package.json
+
+EXPOSE 3000
+
+ENV NODELINK_SERVER_PORT=3000 \
+    NODELINK_SERVER_HOST=0.0.0.0 \
+    NODELINK_CLUSTER_ENABLED=true
+
+CMD ["npm", "start"]

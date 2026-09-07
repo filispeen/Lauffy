@@ -54,11 +54,28 @@ local function create_lavalink_client()
       node.options.id, tostring(resumed), tostring(session_id))
   end)
   manager:on("nodeError", function(node, err)
-    utils.log("ERROR", "Node %s error: %s", node.options.id, tostring(err))
+    utils.log_error("Node " .. tostring(node.options.id) .. " error", err)
   end)
-  manager:on("error", function(player, err)
-    utils.log("ERROR", "Guild %s player error: %s",
-      tostring(player and player.guildId or "?"), tostring(err))
+  manager:on("nodeConnect", function(node)
+    utils.log("NODE", "Node %s connected to %s:%s",
+      tostring(node.options.id), tostring(node.options.host), tostring(node.options.port))
+  end)
+  manager:on("nodeDisconnect", function(node, reason)
+    utils.log("WARN", "Node %s disconnected: %s",
+      tostring(node.options.id), utils.format_error(reason))
+  end)
+  manager:on("nodeReconnecting", function(node, attempt, delay)
+    utils.log("WARN", "Node %s reconnecting (attempt %s in %sms)",
+      tostring(node.options.id), tostring(attempt), tostring(delay))
+  end)
+  manager:on("error", function(player_or_err, err)
+    -- lavalink.lua emits player errors as (player, err), but its Emitter emits
+    -- listener failures as (err). Supporting both avoids masking the root cause.
+    if err == nil then
+      utils.log_error("Lavalink manager error", player_or_err)
+      return
+    end
+    utils.log_error("Guild " .. tostring(player_or_err and player_or_err.guildId or "?") .. " player error", err)
   end)
   manager:on("trackStart", function(player, track)
     log_track("TRACK", player, track)
@@ -72,7 +89,7 @@ local function create_lavalink_client()
   end)
   manager:on("trackError", function(player, track, err)
     log_track("ERROR", player, track)
-    utils.log("ERROR", "Guild %s: Lavalink track error: %s", tostring(player.guildId), tostring(err))
+    utils.log_error("Guild " .. tostring(player.guildId) .. " Lavalink track error", err)
     player:skip(nil, false)
   end)
   manager:on("queueEnd", function(player)
@@ -98,7 +115,7 @@ local function create_lavalink_client()
 end
 
 bot:on("application_command_error", function(ctx, err)
-  utils.log("ERROR", "Slash command failed: %s", tostring(err))
+  utils.log_error("Slash command failed", err)
   pcall(ctx.respond, ctx, "An internal error occurred while running this command.", { ephemeral = true })
 end)
 

@@ -1,6 +1,50 @@
 local fs = require("fs")
 local path = require("path")
 
+local function safe_tostring(value)
+  local ok, result = pcall(tostring, value)
+  return ok and result or "<unprintable value>"
+end
+
+local function format_error_value(value, seen, depth)
+  local value_type = type(value)
+  if value == nil then return "<no error details>" end
+  if value_type ~= "table" then return safe_tostring(value) end
+  if seen[value] then return "<cycle>" end
+  if depth >= 3 then return "<nested table>" end
+
+  seen[value] = true
+  local parts, count = {}, 0
+  for _, key in ipairs({ "message", "error", "code", "status", "statusCode", "body", "stack", "cause" }) do
+    local field = rawget(value, key)
+    if field ~= nil then
+      count = count + 1
+      parts[#parts + 1] = key .. "=" .. format_error_value(field, seen, depth + 1)
+    end
+  end
+  if count == 0 then
+    for key, field in pairs(value) do
+      count = count + 1
+      if count > 12 then
+        parts[#parts + 1] = "..."
+        break
+      end
+      parts[#parts + 1] = safe_tostring(key) .. "=" .. format_error_value(field, seen, depth + 1)
+    end
+  end
+  seen[value] = nil
+  return "{" .. table.concat(parts, ", ") .. "}"
+end
+
+local function format_error(err)
+  return format_error_value(err, {}, 0)
+end
+
+local function traceback(err)
+  local message = format_error(err)
+  if debug and debug.traceback then return debug.traceback(message, 2) end
+  return message
+end
 local function log(level, fmt, ...)
   local prefix = {
     INFO  = "[INFO ]",
@@ -19,6 +63,9 @@ local function log(level, fmt, ...)
   print(string.format("%s %s %s", ts, tag, string.format(fmt, ...)))
 end
 
+local function log_error(context, err)
+  log("ERROR", "%s\n%s", context, traceback(err))
+end
 local function load_commands(bot)
   local commands_dir = path.join(process.cwd(), "commands")
   local files, err = fs.readdirSync(commands_dir)
@@ -50,5 +97,8 @@ end
 
 return {
   log = log,
+  format_error = format_error,
+  traceback = traceback,
+  log_error = log_error,
   load_commands = load_commands,
 }

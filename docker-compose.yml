@@ -6,22 +6,31 @@ services:
     env_file:
       - .env
     environment:
-      LAVALINK_HOST: lavalink
+      LAVALINK_HOST: NODE
     depends_on:
-      - lavalink
+      - NODE
     volumes:
       - lauffy-data:/app/data
 
-  lavalink:
+  NODE:
     build:
       context: .
-      dockerfile: Dockerfile.lavalink
-    image: lauffy-lavalink:local
+      dockerfile: Dockerfile.nodelink
+    image: lauffy-nodelink:local
     restart: unless-stopped
     environment:
-      LAVALINK_SERVER_PASSWORD: ${LAVALINK_PASS:-youshallnotpass}
-    volumes:
-      - ./application.yml:/opt/Lavalink/application.yml:ro
+      NODELINK_SERVER_PASSWORD: ${LAVALINK_PASS:-youshallnotpass}
+
+#  lavalink:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.lavalink
+#    image: lauffy-lavalink:local
+#    restart: unless-stopped
+#    environment:
+#      LAVALINK_SERVER_PASSWORD: ${LAVALINK_PASS:-youshallnotpass}
+#    volumes:
+#      - ./application.yml:/opt/Lavalink/application.yml:ro
 
 volumes:
   lauffy-data:

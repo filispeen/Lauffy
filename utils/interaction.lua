@@ -11,9 +11,9 @@ function M.fail(ctx, message)
 end
 
 function M.run(ctx, callback)
-  local ok, err = pcall(callback)
+  local ok, err = xpcall(callback, general.traceback)
   if not ok then
-    general.log("ERROR", "Command failed: %s", tostring(err))
+    general.log("ERROR", "Command failed:\n%s", err)
     pcall(M.fail, ctx, "Lavalink could not complete this command.")
   end
 end

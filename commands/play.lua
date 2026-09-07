@@ -18,7 +18,7 @@ local function autocomplete_response(ctx, choices)
   })
 end
 
-local function autocomplete(ctx)
+local function autocomplete_impl(ctx)
   local query = type(ctx and ctx.value) == "string" and ctx.value:match("^%s*(.-)%s*$") or ""
   if query == "" or is_url(query) then return autocomplete_response(ctx, {}) end
   local manager = ctx.bot and ctx.bot.lavalink
@@ -46,6 +46,13 @@ local function autocomplete(ctx)
   return autocomplete_response(ctx, choices)
 end
 
+local function autocomplete(ctx)
+  local ok, err = xpcall(function() return autocomplete_impl(ctx) end, general.traceback)
+  if not ok then
+    general.log("ERROR", "Lavalink autocomplete failed:\n%s", err)
+    pcall(autocomplete_response, ctx, {})
+  end
+end
 return {
   name = "play",
   description = "Play a Lavalink search query or URL",

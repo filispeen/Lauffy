@@ -18,7 +18,7 @@ local function autocomplete_response(ctx, choices)
   })
 end
 
-local function favorite_autocomplete(ctx)
+local function favorite_autocomplete_impl(ctx)
   local guild_id = ctx and ctx.interaction and ctx.interaction.guild_id
   if not guild_id then return autocomplete_response(ctx, {}) end
   local query = type(ctx.value) == "string" and ctx.value:lower() or ""
@@ -35,6 +35,13 @@ local function favorite_autocomplete(ctx)
   return autocomplete_response(ctx, choices)
 end
 
+local function favorite_autocomplete(ctx)
+  local ok, err = xpcall(function() return favorite_autocomplete_impl(ctx) end, general.traceback)
+  if not ok then
+    general.log("ERROR", "Favorites autocomplete failed:\n%s", err)
+    pcall(autocomplete_response, ctx, {})
+  end
+end
 local function favorite_embed(favorites)
   local lines = {}
   for _, favorite in ipairs(favorites) do

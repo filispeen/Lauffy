@@ -54,6 +54,12 @@ local function create_lavalink_client()
       node.options.id, tostring(resumed), tostring(session_id))
   end)
   manager:on("nodeError", function(node, err)
+    if utils.format_error(err) == "<no error details>" then
+      utils.log("ERROR", "Node %s (%s:%s) returned no details; check that NodeLink is running, LAVALINK_HOST/PORT/PASS, and its logs.",
+        tostring(node.options.id), tostring(node.options.host), tostring(node.options.port))
+      return
+    end
+
     utils.log_error("Node " .. tostring(node.options.id) .. " error", err)
   end)
   manager:on("nodeConnect", function(node)

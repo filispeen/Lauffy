@@ -9,7 +9,11 @@ end
 local function format_error_value(value, seen, depth)
   local value_type = type(value)
   if value == nil then return "<no error details>" end
-  if value_type ~= "table" then return safe_tostring(value) end
+  if value_type ~= "table" then
+    local text = safe_tostring(value)
+    if text:match("^Uncaught Error:%s*%(%s*null%s*%)$") then return "<no error details>" end
+    return text
+  end
   if seen[value] then return "<cycle>" end
   if depth >= 3 then return "<nested table>" end
 

@@ -11,18 +11,8 @@ RUN curl -fsSL https://github.com/luvit/lit/raw/master/get-lit.sh | sh
 
 COPY package.lua ./
 
-RUN attempt=1; \
-    max_attempts=10; \
-    until ./lit install; do \
-      if [ "$attempt" -ge "$max_attempts" ]; then \
-        echo "lit install failed after $max_attempts attempts" >&2; \
-        exit 1; \
-      fi; \
-      delay=5; \
-      echo "lit install failed; retrying in ${delay}s (attempt $((attempt + 1))/$max_attempts)" >&2; \
-      sleep "$delay"; \
-      attempt=$((attempt + 1)); \
-    done
+# Made for low end servers to install packages synchronously to avoid build freezing due to high CPU usage. (On my server)
+RUN ./luvit -e "local deps = dofile('package.lua').dependencies; for _, pkg in pairs(deps) do os.execute('./lit install ' .. pkg) end"
 
 FROM gcr.io/distroless/cc-debian12
 

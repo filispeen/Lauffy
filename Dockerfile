@@ -1,6 +1,8 @@
 FROM debian:bookworm-slim AS builder
 
 RUN apt-get update && apt-get install -y \
+    tar \
+    xz-utils \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -13,6 +15,7 @@ COPY package.lua ./
 
 # Made for low end servers to install packages synchronously to avoid build freezing due to high CPU usage. (On my server)
 RUN ./luvit -e "local deps = dofile('package.lua').dependencies; for _, pkg in pairs(deps) do os.execute('./lit install ' .. pkg) end"
+RUN ./luvit ./deps/discord.lua/install.lua
 
 FROM gcr.io/distroless/cc-debian12
 

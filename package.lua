@@ -7,7 +7,7 @@ return {
   author = { name = "filispeen", email = "illayfilisp@gmail.com" },
   homepage = "https://github.com/filispeen/Lauffy",
   dependencies = {
-    "filispeen/discord.lua@v1.1.3",
+    "filispeen/discord.lua@v1.1.4",
     "filispeen/lavalink.lua@v0.4.7"
   },
   files = {
